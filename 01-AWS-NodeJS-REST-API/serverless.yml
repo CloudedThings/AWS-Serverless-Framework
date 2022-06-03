@@ -1,0 +1,166 @@
+service: aws-nodejs-template
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  profile: serverlessUser
+  region: eu-west-1
+  stackTags:
+    Name: "Serverless Course"
+  environment:
+    tableName: ${self:custom.tableName}
+    bucketName: ${self:custom.bucketName}
+  
+plugins:
+  - serverless-s3-sync
+  - serverless-webpack
+  - serverless-plugin-resource-tagging
+  - serverless-iam-roles-per-function
+  - serverless-add-api-key
+
+package:
+  individually: true
+
+custom:
+  tableName: sls-course-player-points
+  bucketName: sls-course-upload-bucket
+  s3Sync:
+    - bucketName: ${self:custom.bucketName}
+      localDir: UploadData
+  apiKeys:
+    - name: free
+      usagePlan:
+        name: freeUsagePlan
+        quota:
+          limit: 1000
+          period: MONTH
+        throttle:
+          burstLimit: 100
+          rateLimit: 20
+    - name: paid
+      usagePlan:
+        name: paidUsagePlan
+        quota:
+          limit: 10000
+          period: MONTH
+        throttle:
+          burstLimit: 1000
+          rateLimit: 50
+
+functions:
+  getPlayerScore:
+    handler: lambdas/endpoints/getPlayerScore.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action: dynamodb:GetItem
+        Resource: 
+          Fn::GetAtt:
+            - DevDynamoTable
+            - Arn
+    events:
+      - http:
+          path: get-player-score/{ID}
+          method: GET
+          cors: true
+          private: true
+
+  createPlayerScore:
+    handler: lambdas/endpoints/createPlayerScore.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action: dynamodb:PutItem
+        Resource: 
+          Fn::GetAtt: 
+            - DevDynamoTable
+            - Arn
+    events:
+      - http:
+          path: create-player-score/{ID}
+          method: POST
+          cors: true    
+
+  createFile:
+    handler: lambdas/endpoints/createFile.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action: s3:*
+        Resource: 
+          Fn::GetAtt: 
+            - UploadBucket
+            - Arn
+    events:
+      - http:
+          path: create-file/{fileName}
+          method: POST
+          cors: true 
+
+  getFile:
+    handler: lambdas/endpoints/getFile.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action: s3:*
+        Resource: 
+          Fn::GetAtt: 
+            - UploadBucket
+            - Arn
+    events:
+      - http:
+          path: get-file/{fileName}
+          method: GET
+          cors: true 
+  proxy:
+    handler: lambdas/endpoints/proxy.handler
+    events:
+      - http:
+          path: jokes/{proxy+}
+          method: ANY
+          integration: http-proxy
+          request:
+            uri: http://api.icndb.com/{proxy}
+            parameters:
+              paths: 
+                proxy: true
+  sendEmail:
+    handler: lambdas/endpoints/sendEmail.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action: ses:*
+        Resource: '*'
+    events:
+      - http:
+          path: send-email
+          method: POST
+          cors: true 
+
+resources:
+ Resources:
+    UploadBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.bucketName}
+    DevDynamoTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tableName}
+        AttributeDefinitions:
+          - AttributeName: ID
+            AttributeType: S
+        KeySchema:
+          - AttributeName: ID
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+    myAssumeRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: SlsDemoRole
+        AssumeRolePolicyDocument: 
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: 
+                  - lambda.amazonaws.com
+                  - apigateway.amazonaws.com
+              Action:
+                - sts:AssumeRole

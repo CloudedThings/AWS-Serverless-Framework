@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "serverless-iam-roles-per-function": "^3.2.0",
+    "serverless-plugin-resource-tagging": "^1.2.0",
+    "serverless-s3-sync": "^3.0.0",
+    "serverless-webpack": "^5.7.1",
+    "webpack": "^5.73.0"
+  },
+  "devDependencies": {
+    "serverless-add-api-key": "^4.2.1"
+  }
+}
