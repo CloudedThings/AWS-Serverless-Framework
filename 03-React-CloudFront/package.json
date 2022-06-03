@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "serverless-iam-roles-per-function": "^3.2.0",
+    "serverless-plugin-resource-tagging": "^1.2.0",
+    "serverless-s3-sync": "^3.0.0"
+  }
+}
